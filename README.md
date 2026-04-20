@@ -18,7 +18,9 @@ Lösch-Flag, Notizen, **Kommentare pro Ordner** und **globaler Team-Chat**.
 ## Login
 
 Die App kennt fünf feste Accounts. Login per **Name + Passwort** (intern
-gemappt auf `<slug>@maxi.local`). Start-Passwort für alle: **`maxi2026`**.
+gemappt auf `maxibaum.<slug>@gmail.com` — Supabase verlangt eine echte
+Domain; die Adressen werden nie für echte E-Mails genutzt).
+Start-Passwort für alle: **`maxi2026`**.
 
 - Christian Bund
 - Hamster

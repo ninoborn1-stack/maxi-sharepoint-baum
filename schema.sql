@@ -72,17 +72,32 @@ do $$ begin
 end $$;
 
 -- 4) USER-ACCOUNTS ------------------------------------------------------
--- Login: Name eingeben -> App wandelt zu <slug>@maxi.local
+-- Login: Name eingeben -> App mappt intern zu <slug>+maxibaum@gmail.com
+-- (Supabase verlangt eine echte Domain; die Adressen empfangen keine Mails.)
 -- Passwort fuer alle: maxi2026 (kann spaeter via Supabase geaendert werden)
+
+-- Aufraeumen alter Versuche (idempotent):
+delete from auth.identities where provider_id in (
+  'christian-bund@maxi.local','hamster@maxi.local',
+  'stefan-thoelking@maxi.local','maxi-wever@maxi.local','nino@maxi.local',
+  'maxibaum.christian@gmail.com','maxibaum.hamster@gmail.com',
+  'maxibaum.stefan@gmail.com','maxibaum.wever@gmail.com','maxibaum.nino@gmail.com',
+  'probe-user-zzy@gmail.com'
+);
+delete from auth.users where email in (
+  'christian-bund@maxi.local','hamster@maxi.local',
+  'stefan-thoelking@maxi.local','maxi-wever@maxi.local','nino@maxi.local',
+  'probe-user-zzy@gmail.com'
+);
 
 do $$
 declare
   users constant text[][] := array[
-    ['christian-bund@maxi.local', 'Christian Bund'],
-    ['hamster@maxi.local',        'Hamster'],
-    ['stefan-thoelking@maxi.local','Stefan Thoelking'],
-    ['maxi-wever@maxi.local',     'Maxi Wever'],
-    ['nino@maxi.local',           'Nino']
+    ['maxibaum.christian@gmail.com', 'Christian Bund'],
+    ['maxibaum.hamster@gmail.com',   'Hamster'],
+    ['maxibaum.stefan@gmail.com',    'Stefan Thoelking'],
+    ['maxibaum.wever@gmail.com',     'Maxi Wever'],
+    ['maxibaum.nino@gmail.com',      'Nino']
   ];
   u text[];
   uid uuid;
