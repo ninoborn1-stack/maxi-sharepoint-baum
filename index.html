@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SharePoint Ordnerstruktur – Team</title>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; font-size: 13px; display: flex; height: 100vh; overflow: hidden; background: #f0f2f5; }
+
+/* ---------- Sidebar ---------- */
+#sidebar { width: 260px; min-width: 200px; background: #1F3864; color: #fff; display: flex; flex-direction: column; overflow: hidden; }
+#sidebar h2 { padding: 16px 14px 8px; font-size: 14px; letter-spacing: .5px; border-bottom: 1px solid #2d4f8a; display: flex; align-items: center; gap: 8px; }
+#site-list { overflow-y: auto; flex: 0 0 auto; max-height: 200px; }
+#site-list a { display: block; padding: 8px 14px; color: #ccd9f0; text-decoration: none; font-size: 12px; border-left: 3px solid transparent; }
+#site-list a:hover, #site-list a.active { background: #2d4f8a; color: #fff; border-left-color: #5b9bd5; }
+.filter-section { padding: 10px 14px; border-top: 1px solid #2d4f8a; }
+.filter-section h3 { font-size: 11px; text-transform: uppercase; color: #8aaad4; margin-bottom: 6px; letter-spacing: .8px; }
+.filter-btn { display: block; width: 100%; text-align: left; padding: 5px 8px; margin: 2px 0; background: transparent; border: 1px solid #2d4f8a; color: #ccd9f0; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; }
+.filter-btn:hover, .filter-btn.active { background: #2d4f8a; color: #fff; border-color: #5b9bd5; font-weight: bold; }
+
+/* ---------- Main area ---------- */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#toolbar { background: #fff; border-bottom: 1px solid #dce3ed; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+#toolbar h1 { font-size: 15px; color: #1F3864; font-weight: bold; flex: 1; display: flex; align-items: center; gap: 8px; }
+#search-box { padding: 6px 10px; border: 1px solid #c8d0dc; border-radius: 4px; font-size: 12px; width: 220px; }
+.btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; font-family: inherit; }
+.btn-expand { background: #e8f0fb; color: #1F3864; border: 1px solid #c8d0dc; }
+.btn-chat { background: #1F3864; color: #fff; }
+.btn-logout { background: #eceef3; color: #444; border: 1px solid #c8d0dc; }
+#user-chip { font-size: 11px; color: #1F3864; font-weight: bold; padding: 4px 10px; background: #e8f0fb; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; }
+#user-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: #3bc77a; }
+#breadcrumb { padding: 6px 16px; background: #f7f9fc; border-bottom: 1px solid #dce3ed; font-size: 11px; color: #666; min-height: 28px; }
+#tree-container { flex: 1; overflow: auto; padding: 12px 16px; }
+
+/* ---------- Tree nodes ---------- */
+.tnode { margin: 1px 0; }
+.tnode-header { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
+.tnode-header:hover { background: #e8f0fb; }
+.tnode-header .toggle { width: 16px; text-align: center; color: #666; font-size: 11px; flex-shrink: 0; }
+.tnode-header .label { flex: 1; word-break: break-word; }
+.tnode-header [data-lucide] { flex-shrink: 0; color: #1F3864; }
+.tnode-children { margin-left: 20px; border-left: 1px solid #dce3ed; padding-left: 4px; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: bold; cursor: pointer; flex-shrink: 0; }
+.badge [data-lucide] { width: 11px; height: 11px; }
+.badge-erledigt { background: #c6efce; color: #276221; }
+.badge-wip { background: #ffeb9c; color: #9c6500; }
+.badge-ausstehend { background: #ffc7ce; color: #9c0006; }
+.badge-empty { background: #e0e0e0; color: #555; }
+.badge-delete { background: #d32f2f; color: #fff; margin-left: 3px; font-size: 9px; padding: 1px 5px; }
+.badge-comments { background: #5b9bd5; color: #fff; margin-left: 3px; font-size: 9px; padding: 1px 6px; }
+.depth-0 > .tnode-header .label { font-weight: bold; font-size: 14px; color: #1F3864; }
+.depth-1 > .tnode-header .label { font-weight: bold; font-size: 13px; color: #1F3864; }
+.depth-2 > .tnode-header .label { font-weight: bold; color: #2d4f8a; }
+
+/* ---------- Modal ---------- */
+#modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; align-items: center; justify-content: center; }
+#modal-overlay.open { display: flex; }
+#modal { background: #fff; border-radius: 8px; width: 520px; max-width: 95vw; max-height: 90vh; box-shadow: 0 8px 32px rgba(0,0,0,.25); overflow: hidden; display: flex; flex-direction: column; }
+#modal-title { background: #1F3864; color: #fff; padding: 14px 18px; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+#modal-path { font-size: 11px; color: #ccd9f0; margin-top: 4px; word-break: break-all; font-weight: normal; }
+#modal-body { padding: 18px; overflow-y: auto; flex: 1; }
+.form-row { margin-bottom: 14px; }
+.form-row label { display: block; font-size: 11px; font-weight: bold; color: #555; margin-bottom: 4px; }
+.form-row select, .form-row textarea, .form-row input { width: 100%; padding: 7px 9px; border: 1px solid #c8d0dc; border-radius: 4px; font-size: 13px; font-family: Arial; }
+.form-row textarea { height: 70px; resize: vertical; }
+#modal-footer { padding: 12px 18px; background: #f7f9fc; border-top: 1px solid #eee; display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0; }
+.btn-primary { background: #1F3864; color: #fff; padding: 7px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; font-family: inherit; }
+.btn-danger { background: #c62828; color: #fff; padding: 7px 14px; border: none; border-radius: 4px; cursor: pointer; margin-right: auto; display: inline-flex; align-items: center; gap: 5px; font-family: inherit; }
+.btn-cancel { background: #e0e0e0; color: #333; padding: 7px 14px; border: none; border-radius: 4px; cursor: pointer; font-family: inherit; }
+
+/* ---------- Comments in modal ---------- */
+.comments-section { border-top: 1px solid #eee; padding-top: 14px; margin-top: 4px; }
+.comments-section h4 { font-size: 12px; color: #1F3864; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.comment { background: #f7f9fc; border-left: 3px solid #5b9bd5; padding: 7px 10px; margin-bottom: 6px; border-radius: 4px; }
+.comment .meta { font-size: 10px; color: #666; margin-bottom: 3px; }
+.comment .meta strong { color: #1F3864; }
+.comment .text { font-size: 12px; color: #333; white-space: pre-wrap; word-break: break-word; }
+.comment-empty { color: #999; font-size: 11px; font-style: italic; padding: 4px 0; }
+.comment-input-row { display: flex; gap: 6px; margin-top: 8px; }
+.comment-input-row input { flex: 1; }
+.comment-input-row button { padding: 7px 14px; }
+
+#stats { font-size: 11px; color: #888; padding: 4px 16px; background: #fff; border-top: 1px solid #eee; flex-shrink: 0; }
+
+/* ---------- Chat panel ---------- */
+#chat-panel { position: fixed; right: 14px; bottom: 14px; width: 340px; height: 460px; background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.22); display: none; flex-direction: column; z-index: 500; overflow: hidden; }
+#chat-panel.open { display: flex; }
+#chat-header { background: #1F3864; color: #fff; padding: 10px 14px; font-weight: bold; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+#chat-header .close { margin-left: auto; background: transparent; border: none; color: #fff; cursor: pointer; font-size: 16px; }
+#chat-messages { flex: 1; overflow-y: auto; padding: 10px; background: #f7f9fc; }
+.chat-msg { margin-bottom: 8px; }
+.chat-msg .meta { font-size: 10px; color: #666; margin-bottom: 2px; }
+.chat-msg .meta strong { color: #1F3864; }
+.chat-msg .text { background: #fff; padding: 6px 10px; border-radius: 8px; font-size: 12px; display: inline-block; max-width: 100%; word-break: break-word; white-space: pre-wrap; }
+.chat-msg.mine .text { background: #1F3864; color: #fff; }
+#chat-form { border-top: 1px solid #eee; padding: 8px; display: flex; gap: 6px; background: #fff; }
+#chat-form input { flex: 1; padding: 7px 9px; border: 1px solid #c8d0dc; border-radius: 4px; font-size: 13px; font-family: Arial; }
+#chat-form button { background: #1F3864; color: #fff; border: none; border-radius: 4px; padding: 7px 12px; cursor: pointer; font-family: inherit; }
+
+/* ---------- Login screen ---------- */
+#login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #1F3864, #2d4f8a); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+#login-box { background: #fff; padding: 34px 36px; border-radius: 12px; width: 360px; max-width: 92vw; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+#login-box h1 { color: #1F3864; margin-bottom: 6px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+#login-box .sub { color: #666; font-size: 12px; margin-bottom: 22px; }
+#login-box label { display: block; font-size: 11px; font-weight: bold; color: #555; margin-bottom: 4px; margin-top: 10px; }
+#login-box select, #login-box input { width: 100%; padding: 9px 10px; border: 1px solid #c8d0dc; border-radius: 4px; font-size: 13px; font-family: Arial; }
+#login-box button { width: 100%; margin-top: 18px; padding: 10px; background: #1F3864; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; font-family: inherit; }
+#login-box button:disabled { opacity: .6; cursor: wait; }
+#login-error { color: #c62828; font-size: 12px; margin-top: 10px; min-height: 18px; }
+
+/* Lucide default */
+[data-lucide] { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+#sidebar h2 [data-lucide], #toolbar h1 [data-lucide], #chat-header [data-lucide], #login-box h1 [data-lucide] { width: 18px; height: 18px; }
+</style>
+</head>
+<body>
+
+<!-- ========== LOGIN SCREEN ========== -->
+<div id="login-overlay">
+  <div id="login-box">
+    <h1><i data-lucide="folder-tree"></i> SharePoint Baum</h1>
+    <div class="sub">Bitte einloggen, um gemeinsam zu arbeiten.</div>
+    <label>Name</label>
+    <select id="login-name">
+      <option value="Christian Bund">Christian Bund</option>
+      <option value="Hamster">Hamster</option>
+      <option value="Stefan Thoelking">Stefan Thölking</option>
+      <option value="Maxi Wever">Maxi Wever</option>
+      <option value="Nino">Nino</option>
+    </select>
+    <label>Passwort</label>
+    <input id="login-pw" type="password" autocomplete="current-password" placeholder="Start-Passwort: maxi2026">
+    <button id="login-btn" type="button">Einloggen</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- ========== SIDEBAR ========== -->
+<div id="sidebar">
+  <h2><i data-lucide="folder"></i> SharePoint Sites</h2>
+  <div id="site-list"></div>
+  <div class="filter-section">
+    <h3>Status Filter</h3>
+    <button class="filter-btn active" onclick="setStatusFilt('')">Alle</button>
+    <button class="filter-btn" onclick="setStatusFilt('\u2713 Erledigt')">Erledigt</button>
+    <button class="filter-btn" onclick="setStatusFilt('\u26a0 In Arbeit')">In Arbeit</button>
+    <button class="filter-btn" onclick="setStatusFilt('\u2717 Ausstehend')">Ausstehend</button>
+    <button class="filter-btn" onclick="setStatusFilt('__empty__')">Noch leer</button>
+  </div>
+  <div class="filter-section">
+    <h3>Bearbeiter</h3>
+    <button class="filter-btn active" onclick="setBearbFilt('')">Alle</button>
+    <button class="filter-btn" onclick="setBearbFilt('Christian Bund')">Christian Bund</button>
+    <button class="filter-btn" onclick="setBearbFilt('Hamster')">Hamster</button>
+    <button class="filter-btn" onclick="setBearbFilt('Stefan Th\u00f6lking')">Stefan Thölking</button>
+    <button class="filter-btn" onclick="setBearbFilt('Maxi Wever')">Maxi Wever</button>
+    <button class="filter-btn" onclick="setBearbFilt('__none__')">Nicht zugewiesen</button>
+  </div>
+  <div class="filter-section">
+    <h3>Löschen</h3>
+    <button class="filter-btn active" onclick="setLoeschenFilt('')">Alle</button>
+    <button class="filter-btn" onclick="setLoeschenFilt('Ja')">Zu löschen</button>
+    <button class="filter-btn" onclick="setLoeschenFilt('Nein')">Behalten</button>
+  </div>
+</div>
+
+<!-- ========== MAIN ========== -->
+<div id="main">
+  <div id="toolbar">
+    <h1><i data-lucide="folder-tree"></i> SharePoint Ordnerstruktur</h1>
+    <input type="text" id="search-box" placeholder="Ordner suchen..." oninput="doSearch(this.value)">
+    <button class="btn btn-expand" onclick="expandAll()"><i data-lucide="chevrons-down"></i> Alle</button>
+    <button class="btn btn-expand" onclick="collapseAll()"><i data-lucide="chevrons-right"></i> Alle</button>
+    <button class="btn btn-chat" onclick="toggleChat()"><i data-lucide="message-circle"></i> Chat</button>
+    <span id="user-chip" style="display:none"><span class="dot"></span><span id="user-chip-name"></span></span>
+    <button class="btn btn-logout" onclick="logout()"><i data-lucide="log-out"></i></button>
+  </div>
+  <div id="breadcrumb">Klicke auf einen Ordner-Badge, um Status zu bearbeiten</div>
+  <div id="tree-container"></div>
+  <div id="stats"></div>
+</div>
+
+<!-- ========== EDIT MODAL ========== -->
+<div id="modal-overlay">
+  <div id="modal">
+    <div id="modal-title">Status bearbeiten<div id="modal-path"></div></div>
+    <div id="modal-body">
+      <div class="form-row">
+        <label>Status</label>
+        <select id="modal-status">
+          <option value="">-- Kein Status --</option>
+          <option value="&#10003; Erledigt">&#10003; Erledigt</option>
+          <option value="&#9888; In Arbeit">&#9888; In Arbeit</option>
+          <option value="&#10007; Ausstehend">&#10007; Ausstehend</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Bearbeiter</label>
+        <select id="modal-bearb">
+          <option value="">-- Nicht zugewiesen --</option>
+          <option value="Christian Bund">Christian Bund</option>
+          <option value="Hamster">Hamster</option>
+          <option value="Stefan Th&#246;lking">Stefan Thölking</option>
+          <option value="Maxi Wever">Maxi Wever</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label><i data-lucide="trash-2"></i> Löschen?</label>
+        <select id="modal-loeschen">
+          <option value="">-- Keine Angabe --</option>
+          <option value="Ja">Ja – soll gelöscht werden</option>
+          <option value="Nein">Nein – behalten</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Notiz</label>
+        <textarea id="modal-note" placeholder="Optionale Notiz..."></textarea>
+      </div>
+
+      <div class="comments-section">
+        <h4><i data-lucide="message-square"></i> Kommentare</h4>
+        <div id="comments-list"></div>
+        <div class="comment-input-row">
+          <input id="comment-input" type="text" placeholder="Kommentar schreiben...">
+          <button class="btn-primary" type="button" onclick="postComment()"><i data-lucide="send"></i></button>
+        </div>
+      </div>
+    </div>
+    <div id="modal-footer">
+      <button class="btn-danger" onclick="deleteEntry()"><i data-lucide="trash-2"></i> Eintrag löschen</button>
+      <button class="btn-cancel" onclick="closeModal()">Schließen</button>
+      <button class="btn-primary" onclick="saveModal()"><i data-lucide="check"></i> Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== GLOBAL CHAT ========== -->
+<div id="chat-panel">
+  <div id="chat-header">
+    <i data-lucide="message-circle"></i> Team-Chat
+    <button class="close" type="button" onclick="toggleChat()">×</button>
+  </div>
+  <div id="chat-messages"></div>
+  <form id="chat-form" onsubmit="event.preventDefault(); sendChat();">
+    <input id="chat-input" type="text" placeholder="Nachricht schreiben..." autocomplete="off">
+    <button type="submit"><i data-lucide="send"></i></button>
+  </form>
+</div>
+
+<script src="tree-data.js"></script>
+<script>
+/* ========================================================================
+   SUPABASE CLIENT
+   ====================================================================== */
+const SUPA_URL = 'https://mwwkdegdjjncamznyofq.supabase.co';
+const SUPA_KEY = 'sb_publishable_387-fg9KIY9r1loN19J6Og_8JKkqUHi';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'maxi-baum-auth' },
+  realtime: { params: { eventsPerSecond: 10 } }
+});
+
+const NAME_TO_EMAIL = {
+  'Christian Bund':   'christian-bund@maxi.local',
+  'Hamster':          'hamster@maxi.local',
+  'Stefan Thoelking': 'stefan-thoelking@maxi.local',
+  'Maxi Wever':       'maxi-wever@maxi.local',
+  'Nino':             'nino@maxi.local'
+};
+
+let currentUser = null;   // { email, display_name }
+
+/* ========================================================================
+   APP STATE
+   ====================================================================== */
+var statusData = {};
+var curStatusFilt = '', curBearbFilt = '', curLoeschenFilt = '';
+var curPath = '';
+var commentsByPath = {};  // cache for current open folder
+
+/* ========================================================================
+   LOGIN
+   ====================================================================== */
+async function tryLogin() {
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  err.textContent = '';
+  const name = document.getElementById('login-name').value;
+  const pw   = document.getElementById('login-pw').value.trim();
+  const email = NAME_TO_EMAIL[name];
+  if (!email || !pw) { err.textContent = 'Name und Passwort erforderlich.'; return; }
+  btn.disabled = true; btn.textContent = 'Wird geprüft...';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
+  btn.disabled = false; btn.textContent = 'Einloggen';
+  if (error) { err.textContent = 'Login fehlgeschlagen: ' + error.message; return; }
+  const displayName = (data.user && data.user.user_metadata && data.user.user_metadata.display_name) || name;
+  currentUser = { email, display_name: displayName };
+  await startApp();
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+async function checkSession() {
+  const { data } = await sb.auth.getSession();
+  if (data && data.session) {
+    const u = data.session.user;
+    const name = (u.user_metadata && u.user_metadata.display_name) || u.email;
+    currentUser = { email: u.email, display_name: name };
+    await startApp();
+  }
+}
+
+/* ========================================================================
+   APP START (after auth)
+   ====================================================================== */
+async function startApp() {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('user-chip').style.display = 'inline-flex';
+  document.getElementById('user-chip-name').textContent = currentUser.display_name;
+
+  buildSidebar();
+  buildNode(TREE, document.getElementById('tree-container'), 0);
+  await loadAllStatus();
+  updateAllBadges();
+  updateStats();
+  await loadCommentCounts();
+  await loadChat();
+  subscribeRealtime();
+  lucide.createIcons();
+}
+
+/* ========================================================================
+   LOAD DATA FROM SUPABASE
+   ====================================================================== */
+async function loadAllStatus() {
+  const { data, error } = await sb.from('folder_status').select('*');
+  if (error) { console.error(error); return; }
+  statusData = {};
+  data.forEach(r => {
+    statusData[r.path] = {
+      status: r.status || '',
+      bearbeiter: r.bearbeiter || '',
+      loeschen: r.loeschen || '',
+      note: r.note || ''
+    };
+  });
+}
+
+async function loadCommentCounts() {
+  // Lightweight: fetch all comment paths, count locally (<<8835 rows in practice)
+  const { data, error } = await sb.from('folder_comments').select('path');
+  if (error) { console.error(error); return; }
+  const counts = {};
+  data.forEach(r => { counts[r.path] = (counts[r.path] || 0) + 1; });
+  window._commentCounts = counts;
+  updateAllCommentBadges();
+}
+
+function updateAllCommentBadges() {
+  const counts = window._commentCounts || {};
+  document.querySelectorAll('.tnode[data-folder="1"]').forEach(function(w){
+    const header = w.querySelector('.tnode-header');
+    if (!header) return;
+    let cb = header.querySelector('.badge-comments');
+    const n = counts[w.dataset.path] || 0;
+    if (n > 0) {
+      if (!cb) {
+        cb = document.createElement('span');
+        cb.className = 'badge badge-comments';
+        cb.onclick = function(e){ e.stopPropagation(); openModal(null, w.dataset.path); };
+        header.appendChild(cb);
+      }
+      cb.innerHTML = '<i data-lucide="message-square"></i> ' + n;
+      lucide.createIcons({ nodes: [cb] });
+    } else if (cb) {
+      cb.remove();
+    }
+  });
+}
+
+/* ========================================================================
+   REALTIME
+   ====================================================================== */
+function subscribeRealtime() {
+  sb.channel('folder_status_ch')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'folder_status' }, (payload) => {
+      const row = payload.new || payload.old;
+      if (!row || !row.path) return;
+      if (payload.eventType === 'DELETE') delete statusData[row.path];
+      else statusData[row.path] = {
+        status: row.status || '', bearbeiter: row.bearbeiter || '',
+        loeschen: row.loeschen || '', note: row.note || ''
+      };
+      updateAllBadges(); applyFilters(); updateStats();
+    })
+    .subscribe();
+
+  sb.channel('folder_comments_ch')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'folder_comments' }, (payload) => {
+      const r = payload.new;
+      window._commentCounts = window._commentCounts || {};
+      window._commentCounts[r.path] = (window._commentCounts[r.path] || 0) + 1;
+      updateAllCommentBadges();
+      if (curPath === r.path && document.getElementById('modal-overlay').classList.contains('open')) {
+        renderComment(r);
+      }
+    })
+    .subscribe();
+
+  sb.channel('chat_ch')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+      renderChatMsg(payload.new);
+    })
+    .subscribe();
+}
+
+/* ========================================================================
+   TREE RENDERING (from original, kept intact)
+   ====================================================================== */
+function buildSidebar() {
+  var sl = document.getElementById('site-list');
+  sl.innerHTML = '';
+  TREE.children.forEach(function(site) {
+    var a = document.createElement('a');
+    a.href = '#';
+    a.innerHTML = '<i data-lucide="folder"></i> ' + site.name;
+    a.dataset.site = site.name;
+    a.onclick = function(e) {
+      e.preventDefault();
+      document.querySelectorAll('#site-list a').forEach(function(x){x.classList.remove('active');});
+      a.classList.add('active');
+      var el = document.querySelector('[data-site-anchor="'+CSS.escape(site.name)+'"]');
+      if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    };
+    sl.appendChild(a);
+  });
+}
+
+function buildNode(node, parentEl, depth) {
+  var isFolder = depth > 0 && node.path && node.path.split('/').length > 3;
+  var hasChildren = node.children && node.children.length > 0;
+  var wrap = document.createElement('div');
+  wrap.className = 'tnode depth-' + Math.min(depth, 4);
+  if (isFolder) { wrap.dataset.folder = '1'; wrap.dataset.path = node.path; }
+  if (depth === 1) wrap.setAttribute('data-site-anchor', node.name);
+  var header = document.createElement('div');
+  header.className = 'tnode-header';
+  var toggle = document.createElement('span');
+  toggle.className = 'toggle';
+  toggle.textContent = hasChildren ? '\u25b6' : '\u00b7';
+  header.appendChild(toggle);
+  var icon = document.createElement('i');
+  icon.setAttribute('data-lucide', depth===0 ? 'globe' : depth===1 ? 'building-2' : 'folder');
+  header.appendChild(icon);
+  var label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = ' ' + node.name;
+  header.appendChild(label);
+  var badge = null;
+  if (isFolder) {
+    badge = document.createElement('span');
+    badge.className = 'badge badge-empty';
+    badge.textContent = '\u25cb';
+    badge.onclick = function(e) { e.stopPropagation(); openModal(node.name, node.path); };
+    header.appendChild(badge);
+    refreshBadge(badge, node.path);
+  }
+  var cd = null;
+  if (hasChildren) {
+    cd = document.createElement('div');
+    cd.className = 'tnode-children';
+    cd.style.display = 'none';
+    wrap._cd = cd; wrap._node = node; wrap._depth = depth; wrap._rendered = false;
+    var clickFn = function() {
+      var open = cd.style.display !== 'none';
+      if (open) { cd.style.display='none'; toggle.textContent='\u25b6'; }
+      else {
+        if (!wrap._rendered) { node.children.forEach(function(c){buildNode(c,cd,depth+1);}); wrap._rendered=true; lucide.createIcons({ nodes: [cd] }); }
+        cd.style.display='block'; toggle.textContent='\u25bc';
+      }
+    };
+    toggle.onclick = function(e){e.stopPropagation(); clickFn();};
+    header.onclick = clickFn;
+  } else if (isFolder) {
+    header.onclick = function(){ openModal(node.name, node.path); };
+  }
+  wrap.appendChild(header);
+  if (cd) wrap.appendChild(cd);
+  parentEl.appendChild(wrap);
+  if (depth < 2 && hasChildren) {
+    if (!wrap._rendered) { node.children.forEach(function(c){buildNode(c,cd,depth+1);}); wrap._rendered=true; }
+    cd.style.display='block'; toggle.textContent='\u25bc';
+  }
+}
+
+function refreshBadge(badge, path) {
+  if (!badge) return;
+  var nx = badge.nextSibling;
+  while (nx && nx.classList && nx.classList.contains('badge-delete')) { var tmp=nx.nextSibling; nx.remove(); nx=tmp; }
+  var d = statusData[path] || {};
+  var s = d.status || '';
+  if (s==='\u2713 Erledigt') { badge.className='badge badge-erledigt'; badge.textContent='\u2713 Erledigt'; }
+  else if (s==='\u26a0 In Arbeit') { badge.className='badge badge-wip'; badge.textContent='\u26a0 In Arbeit'; }
+  else if (s==='\u2717 Ausstehend') { badge.className='badge badge-ausstehend'; badge.textContent='\u2717 Ausstehend'; }
+  else { badge.className='badge badge-empty'; badge.textContent='\u25cb'; }
+  if (d.loeschen==='Ja') {
+    var db=document.createElement('span'); db.className='badge badge-delete';
+    db.innerHTML='<i data-lucide="trash-2"></i>';
+    db.title='Soll gelöscht werden';
+    db.onclick=function(e){e.stopPropagation();openModal(null,path);};
+    badge.parentNode.insertBefore(db, badge.nextSibling);
+    lucide.createIcons({ nodes: [db] });
+  }
+}
+
+function updateAllBadges() {
+  document.querySelectorAll('.tnode[data-folder="1"]').forEach(function(w){
+    var b=w.querySelector('.badge:not(.badge-delete):not(.badge-comments)');
+    if(b) refreshBadge(b, w.dataset.path);
+  });
+}
+
+/* ========================================================================
+   MODAL (edit status + comments)
+   ====================================================================== */
+async function openModal(name, path) {
+  curPath = path;
+  document.querySelector('#modal-title').firstChild.textContent = (name||path.split('/').pop()||'Status bearbeiten');
+  document.getElementById('modal-path').textContent = path;
+  var d = statusData[path]||{};
+  document.getElementById('modal-status').value = d.status||'';
+  document.getElementById('modal-bearb').value = d.bearbeiter||'';
+  document.getElementById('modal-loeschen').value = d.loeschen||'';
+  document.getElementById('modal-note').value = d.note||'';
+  document.getElementById('breadcrumb').textContent = path;
+  document.getElementById('comments-list').innerHTML = '<div class="comment-empty">Lade...</div>';
+  document.getElementById('comment-input').value = '';
+  document.getElementById('modal-overlay').classList.add('open');
+  await loadCommentsForCurrent();
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); curPath=''; }
+
+async function saveModal() {
+  var s=document.getElementById('modal-status').value;
+  var b=document.getElementById('modal-bearb').value;
+  var l=document.getElementById('modal-loeschen').value;
+  var n=document.getElementById('modal-note').value;
+  const path = curPath;
+  if (s||b||l||n) {
+    statusData[path] = {status:s, bearbeiter:b, loeschen:l, note:n};
+    const { error } = await sb.from('folder_status').upsert({
+      path, status:s||null, bearbeiter:b||null, loeschen:l||null, note:n||null,
+      updated_at: new Date().toISOString(),
+      updated_by: currentUser.display_name
+    }, { onConflict: 'path' });
+    if (error) { alert('Fehler beim Speichern: ' + error.message); return; }
+  } else {
+    delete statusData[path];
+    await sb.from('folder_status').delete().eq('path', path);
+  }
+  updateAllBadges(); applyFilters(); updateStats(); closeModal();
+}
+
+async function deleteEntry() {
+  const path = curPath;
+  delete statusData[path];
+  await sb.from('folder_status').delete().eq('path', path);
+  updateAllBadges(); applyFilters(); updateStats(); closeModal();
+}
+
+/* ========================================================================
+   COMMENTS
+   ====================================================================== */
+async function loadCommentsForCurrent() {
+  const path = curPath;
+  const { data, error } = await sb.from('folder_comments')
+    .select('*').eq('path', path).order('created_at', { ascending: true });
+  const list = document.getElementById('comments-list');
+  if (curPath !== path) return; // user switched
+  if (error) { list.innerHTML = '<div class="comment-empty">Fehler beim Laden.</div>'; return; }
+  if (!data.length) { list.innerHTML = '<div class="comment-empty">Noch keine Kommentare.</div>'; return; }
+  list.innerHTML = '';
+  data.forEach(renderComment);
+}
+
+function renderComment(c) {
+  const list = document.getElementById('comments-list');
+  // clear placeholder
+  const empty = list.querySelector('.comment-empty');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'comment';
+  const when = new Date(c.created_at).toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' });
+  div.innerHTML = '<div class="meta"><strong>' + escapeHtml(c.user_name) + '</strong> · ' + when + '</div>'
+                + '<div class="text">' + escapeHtml(c.text) + '</div>';
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+async function postComment() {
+  const input = document.getElementById('comment-input');
+  const txt = input.value.trim();
+  if (!txt || !curPath) return;
+  input.value = '';
+  const { error } = await sb.from('folder_comments').insert({
+    path: curPath, user_name: currentUser.display_name, text: txt
+  });
+  if (error) { alert('Fehler: ' + error.message); input.value = txt; }
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'comment-input') {
+    e.preventDefault(); postComment();
+  }
+});
+
+/* ========================================================================
+   CHAT
+   ====================================================================== */
+function toggleChat() {
+  const p = document.getElementById('chat-panel');
+  p.classList.toggle('open');
+  if (p.classList.contains('open')) {
+    document.getElementById('chat-input').focus();
+    const m = document.getElementById('chat-messages');
+    m.scrollTop = m.scrollHeight;
+  }
+}
+
+async function loadChat() {
+  const { data, error } = await sb.from('chat_messages')
+    .select('*').order('created_at', { ascending: true }).limit(200);
+  if (error) { console.error(error); return; }
+  const m = document.getElementById('chat-messages');
+  m.innerHTML = '';
+  data.forEach(renderChatMsg);
+}
+
+function renderChatMsg(msg) {
+  const m = document.getElementById('chat-messages');
+  const mine = msg.user_name === currentUser.display_name;
+  const div = document.createElement('div');
+  div.className = 'chat-msg' + (mine ? ' mine' : '');
+  const when = new Date(msg.created_at).toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' });
+  div.innerHTML = '<div class="meta"><strong>' + escapeHtml(msg.user_name) + '</strong> · ' + when + '</div>'
+                + '<div class="text">' + escapeHtml(msg.text) + '</div>';
+  m.appendChild(div);
+  m.scrollTop = m.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const txt = input.value.trim();
+  if (!txt) return;
+  input.value = '';
+  const { error } = await sb.from('chat_messages').insert({
+    user_name: currentUser.display_name, text: txt
+  });
+  if (error) { alert('Chat-Fehler: ' + error.message); input.value = txt; }
+}
+
+/* ========================================================================
+   FILTERS / SEARCH / EXPAND / STATS (unchanged logic)
+   ====================================================================== */
+function setStatusFilt(v) {
+  curStatusFilt=v;
+  document.querySelectorAll('.filter-section:nth-child(3) .filter-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('onclick').includes("'"+v+"'"));
+  });
+  applyFilters();
+}
+function setBearbFilt(v) {
+  curBearbFilt=v;
+  document.querySelectorAll('.filter-section:nth-child(4) .filter-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('onclick').includes("'"+v+"'"));
+  });
+  applyFilters();
+}
+function setLoeschenFilt(v) {
+  curLoeschenFilt=v;
+  document.querySelectorAll('.filter-section:nth-child(5) .filter-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('onclick').includes("'"+v+"'"));
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  document.querySelectorAll('.tnode[data-folder="1"]').forEach(function(w) {
+    var d=statusData[w.dataset.path]||{};
+    var sOk=!curStatusFilt||(curStatusFilt==='__empty__'?!d.status:d.status===curStatusFilt);
+    var bOk=!curBearbFilt||(curBearbFilt==='__none__'?!d.bearbeiter:d.bearbeiter===curBearbFilt);
+    var lOk=!curLoeschenFilt||(d.loeschen===curLoeschenFilt);
+    w.style.display=(sOk&&bOk&&lOk)?'':'none';
+  });
+}
+
+function doSearch(q) {
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.tnode[data-folder="1"]').forEach(function(w){
+    w.style.display=(!q||(w.dataset.path||'').toLowerCase().includes(q))?'':'none';
+  });
+}
+
+function expandAll() {
+  document.querySelectorAll('.tnode').forEach(function(w){
+    if(w._cd){
+      if(!w._rendered){w._node.children.forEach(function(c){buildNode(c,w._cd,w._depth+1);});w._rendered=true;}
+      w._cd.style.display='block';
+      var t=w.querySelector('.toggle'); if(t)t.textContent='\u25bc';
+    }
+  });
+  updateAllBadges();
+  updateAllCommentBadges();
+  lucide.createIcons();
+}
+function collapseAll() {
+  document.querySelectorAll('.tnode-children').forEach(function(cd){
+    cd.style.display='none';
+    var t=cd.parentElement.querySelector('.toggle');
+    if(t&&t.textContent!=='\u00b7')t.textContent='\u25b6';
+  });
+}
+
+function updateStats() {
+  var tot=Object.keys(statusData).length, erl=0, wip=0, loe=0;
+  Object.values(statusData).forEach(function(d){
+    if(d.status==='\u2713 Erledigt')erl++;
+    if(d.status==='\u26a0 In Arbeit')wip++;
+    if(d.loeschen==='Ja')loe++;
+  });
+  document.getElementById('stats').textContent =
+    'Bearbeitet: '+tot+'  ·  Erledigt: '+erl+'  ·  In Arbeit: '+wip+'  ·  Zu löschen: '+loe+'  ·  Gesamt Ordner: 8835';
+}
+
+/* ========================================================================
+   HELPERS
+   ====================================================================== */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+
+/* ========================================================================
+   INIT
+   ====================================================================== */
+document.getElementById('modal-overlay').addEventListener('click', function(e){
+  if(e.target===this)closeModal();
+});
+document.getElementById('login-btn').addEventListener('click', tryLogin);
+document.getElementById('login-pw').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') tryLogin();
+});
+
+lucide.createIcons();
+checkSession();
+</script>
+</body>
+</html>
