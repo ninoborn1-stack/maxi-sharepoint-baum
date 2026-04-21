@@ -691,13 +691,56 @@ function setLoeschenFilt(v) {
   applyFilters();
 }
 
+function ensureAllRendered() {
+  var passes = 0;
+  while (passes++ < 20) {
+    var toRender = Array.prototype.filter.call(
+      document.querySelectorAll('.tnode'), function(w){ return w._cd && !w._rendered; }
+    );
+    if (!toRender.length) break;
+    toRender.forEach(function(w){
+      w._node.children.forEach(function(c){ buildNode(c, w._cd, w._depth + 1); });
+      w._rendered = true;
+    });
+  }
+  lucide.createIcons();
+  updateAllCommentBadges();
+}
+
 function applyFilters() {
-  document.querySelectorAll('.tnode[data-folder="1"]').forEach(function(w) {
-    var d=statusData[w.dataset.path]||{};
-    var sOk=!curStatusFilt||(curStatusFilt==='__empty__'?!d.status:d.status===curStatusFilt);
-    var bOk=!curBearbFilt||(curBearbFilt==='__none__'?!d.bearbeiter:d.bearbeiter===curBearbFilt);
-    var lOk=!curLoeschenFilt||(d.loeschen===curLoeschenFilt);
-    w.style.display=(sOk&&bOk&&lOk)?'':'none';
+  var hasFilter = !!(curStatusFilt || curBearbFilt || curLoeschenFilt);
+  if (!hasFilter) {
+    document.querySelectorAll('.tnode[data-folder="1"]').forEach(function(w){ w.style.display=''; });
+    return;
+  }
+  ensureAllRendered();
+  var allFolders = document.querySelectorAll('.tnode[data-folder="1"]');
+  var matches = [];
+  allFolders.forEach(function(w){
+    var d = statusData[w.dataset.path]||{};
+    var sOk = !curStatusFilt||(curStatusFilt==='__empty__'?!d.status:d.status===curStatusFilt);
+    var bOk = !curBearbFilt||(curBearbFilt==='__none__'?!d.bearbeiter:d.bearbeiter===curBearbFilt);
+    var lOk = !curLoeschenFilt||(d.loeschen===curLoeschenFilt);
+    if (sOk && bOk && lOk) matches.push(w);
+    w.style.display = 'none';
+  });
+  matches.forEach(function(w){
+    w.style.display = '';
+    var cur = w.parentElement;
+    while (cur && cur.id !== 'tree-container') {
+      if (cur.classList && cur.classList.contains('tnode')) {
+        cur.style.display = '';
+      }
+      if (cur.classList && cur.classList.contains('tnode-children')) {
+        cur.style.display = 'block';
+        var parentTnode = cur.parentElement;
+        if (parentTnode) {
+          var tog = parentTnode.querySelector(':scope > .tnode-header > .toggle');
+          if (tog && tog.textContent !== '\u00b7') tog.textContent = '\u25bc';
+        }
+      }
+      cur = cur.parentElement;
+    }
   });
 }
 
