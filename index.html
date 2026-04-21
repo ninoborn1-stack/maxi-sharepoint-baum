@@ -122,8 +122,8 @@ body { font-family: Arial, sans-serif; font-size: 13px; display: flex; height: 1
 <div id="login-overlay">
   <div id="login-box">
     <h1><i data-lucide="folder-tree"></i> SharePoint Baum</h1>
-    <div class="sub">Bitte einloggen, um gemeinsam zu arbeiten.</div>
-    <label>Name</label>
+    <div class="sub">Profil auswählen und einloggen.</div>
+    <label>Profil</label>
     <select id="login-name">
       <option value="Christian Bund">Christian Bund</option>
       <option value="Hamster">Hamster</option>
@@ -131,9 +131,7 @@ body { font-family: Arial, sans-serif; font-size: 13px; display: flex; height: 1
       <option value="Maxi Wever">Maxi Wever</option>
       <option value="Nino">Nino</option>
     </select>
-    <label>Passwort</label>
-    <input id="login-pw" type="password" autocomplete="current-password" placeholder="Start-Passwort: maxi2026">
-    <button id="login-btn" type="button">Einloggen</button>
+    <button id="login-btn" type="button"><i data-lucide="log-in"></i> Einloggen</button>
     <div id="login-error"></div>
   </div>
 </div>
@@ -283,17 +281,20 @@ var commentsByPath = {};  // cache for current open folder
 /* ========================================================================
    LOGIN
    ====================================================================== */
+const SHARED_PW = 'maxi2026';
+
 async function tryLogin() {
   const btn = document.getElementById('login-btn');
   const err = document.getElementById('login-error');
   err.textContent = '';
   const name = document.getElementById('login-name').value;
-  const pw   = document.getElementById('login-pw').value.trim();
   const email = NAME_TO_EMAIL[name];
-  if (!email || !pw) { err.textContent = 'Name und Passwort erforderlich.'; return; }
-  btn.disabled = true; btn.textContent = 'Wird geprüft...';
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
-  btn.disabled = false; btn.textContent = 'Einloggen';
+  if (!email) { err.textContent = 'Profil wählen.'; return; }
+  btn.disabled = true; btn.textContent = 'Einen Moment...';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: SHARED_PW });
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="log-in"></i> Einloggen';
+  lucide.createIcons({ nodes: [btn] });
   if (error) { err.textContent = 'Login fehlgeschlagen: ' + error.message; return; }
   const displayName = (data.user && data.user.user_metadata && data.user.user_metadata.display_name) || name;
   currentUser = { email, display_name: displayName };
@@ -754,7 +755,7 @@ document.getElementById('modal-overlay').addEventListener('click', function(e){
   if(e.target===this)closeModal();
 });
 document.getElementById('login-btn').addEventListener('click', tryLogin);
-document.getElementById('login-pw').addEventListener('keydown', function(e){
+document.getElementById('login-name').addEventListener('keydown', function(e){
   if (e.key === 'Enter') tryLogin();
 });
 
