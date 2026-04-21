@@ -442,7 +442,7 @@ function buildSidebar() {
 }
 
 function buildNode(node, parentEl, depth) {
-  var isFolder = depth > 0 && node.path && node.path.split('/').length > 3;
+  var isFolder = depth > 0 && !!node.path;
   var hasChildren = node.children && node.children.length > 0;
   var wrap = document.createElement('div');
   wrap.className = 'tnode depth-' + Math.min(depth, 4);
